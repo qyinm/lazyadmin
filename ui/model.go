@@ -33,8 +33,35 @@ const (
 	ModeConnectionForm
 )
 
+const (
+	connPaneRatio          = 15
+	tablePaneRatio         = 20
+	minConnPaneWidth       = 20
+	minTablePaneWidth      = 25
+	horizontalPaddingTotal = 4
+	verticalPaddingTotal   = 6
+)
+
+type formFieldInfo struct {
+	label       string
+	placeholder string
+	isPassword  bool
+}
+
+var connFormFieldInfos = []formFieldInfo{
+	{label: "Label"},
+	{label: "Driver"},
+	{label: "Host"},
+	{label: "Port", placeholder: "5432"},
+	{label: "User"},
+	{label: "Password", isPassword: true},
+	{label: "Database Name"},
+	{label: "Path (SQLite)"},
+}
+
 type Model struct {
 	config        *config.Config
+	configPath    string
 	db            *sql.DB
 	driver        string
 	sidebar       list.Model
@@ -59,7 +86,7 @@ type Model struct {
 	connForm    []textinput.Model
 }
 
-func NewModel(cfg *config.Config, database *sql.DB) Model {
+func NewModel(cfg *config.Config, configPath string, database *sql.DB) Model {
 	t := table.New(
 		table.WithColumns([]table.Column{}),
 		table.WithRows([]table.Row{}),
@@ -112,23 +139,20 @@ func NewModel(cfg *config.Config, database *sql.DB) Model {
 	tableList.SetFilteringEnabled(false)
 	tableList.Styles.Title = TitleStyle
 
-	inputs := make([]textinput.Model, 8)
-	labels := []string{"Label", "Driver", "Host", "Port", "User", "Password", "Database Name", "Path (SQLite)"}
-	for i := range inputs {
-		t := textinput.New()
-		t.Cursor.Style = lipgloss.NewStyle().Foreground(DraculaPink)
-		t.Prompt = labels[i] + ": "
-		t.PromptStyle = lipgloss.NewStyle().Foreground(DraculaCyan)
+	inputs := make([]textinput.Model, len(connFormFieldInfos))
+	for i, info := range connFormFieldInfos {
+		ti := textinput.New()
+		ti.Cursor.Style = lipgloss.NewStyle().Foreground(DraculaPink)
+		ti.Prompt = info.label + ": "
+		ti.PromptStyle = lipgloss.NewStyle().Foreground(DraculaCyan)
+		ti.Placeholder = info.placeholder
 
-		if labels[i] == "Port" {
-			t.Placeholder = "5432"
-		}
-		if labels[i] == "Password" {
-			t.EchoMode = textinput.EchoPassword
-			t.EchoCharacter = '•'
+		if info.isPassword {
+			ti.EchoMode = textinput.EchoPassword
+			ti.EchoCharacter = '•'
 		}
 
-		inputs[i] = t
+		inputs[i] = ti
 	}
 
 	mode := ModeView
@@ -139,6 +163,7 @@ func NewModel(cfg *config.Config, database *sql.DB) Model {
 
 	return Model{
 		config:      cfg,
+		configPath:  configPath,
 		db:          database,
 		driver:      cfg.Database.Driver,
 		sidebar:     tableList,
@@ -262,26 +287,25 @@ func (m *Model) resizePanes() {
 		return
 	}
 
-	connWidth := m.width * 15 / 100
-	if connWidth < 20 {
-		connWidth = 20
+	connWidth := m.width * connPaneRatio / 100
+	if connWidth < minConnPaneWidth {
+		connWidth = minConnPaneWidth
 	}
 
-	tableWidth := m.width * 20 / 100
-	if tableWidth < 25 {
-		tableWidth = 25
+	tableWidth := m.width * tablePaneRatio / 100
+	if tableWidth < minTablePaneWidth {
+		tableWidth = minTablePaneWidth
 	}
 
-	contentWidth := m.width - connWidth - tableWidth - 4
+	contentWidth := m.width - connWidth - tableWidth - horizontalPaddingTotal
 
-	panelHeight := m.height - 6
+	panelHeight := m.height - verticalPaddingTotal
 	contentHeight := panelHeight - 2
 
-	m.connSidebar.SetSize(connWidth-4, contentHeight-1)
+	m.connSidebar.SetSize(connWidth-horizontalPaddingTotal, contentHeight-1)
+	m.sidebar.SetSize(tableWidth-horizontalPaddingTotal, contentHeight)
 
-	m.sidebar.SetSize(tableWidth-4, contentHeight)
-
-	m.table.SetWidth(contentWidth - 4)
+	m.table.SetWidth(contentWidth - horizontalPaddingTotal)
 	m.table.SetHeight(contentHeight)
 }
 
@@ -379,28 +403,51 @@ func (m Model) updateConnectionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m Model) submitConnectionForm() (tea.Model, tea.Cmd) {
-	port, _ := strconv.Atoi(m.connForm[3].Value())
+func (m Model) getConnFormFieldValue(label string) string {
+	for i, info := range connFormFieldInfos {
+		if info.label == label {
+			return m.connForm[i].Value()
+		}
+	}
+	return ""
+}
 
-	newConn := config.DatabaseConfig{
-		Label:    m.connForm[0].Value(),
-		Driver:   m.connForm[1].Value(),
-		Host:     m.connForm[2].Value(),
-		Port:     port,
-		User:     m.connForm[4].Value(),
-		Password: m.connForm[5].Value(),
-		Name:     m.connForm[6].Value(),
-		Path:     m.connForm[7].Value(),
+func (m Model) submitConnectionForm() (tea.Model, tea.Cmd) {
+	portStr := m.getConnFormFieldValue("Port")
+	var port int
+	if portStr != "" {
+		var err error
+		port, err = strconv.Atoi(portStr)
+		if err != nil {
+			m.err = fmt.Errorf("invalid port number: %s", portStr)
+			return m, nil
+		}
 	}
 
-	if newConn.Driver == "" {
+	newConn := config.DatabaseConfig{
+		Label:    m.getConnFormFieldValue("Label"),
+		Driver:   m.getConnFormFieldValue("Driver"),
+		Host:     m.getConnFormFieldValue("Host"),
+		Port:     port,
+		User:     m.getConnFormFieldValue("User"),
+		Password: m.getConnFormFieldValue("Password"),
+		Name:     m.getConnFormFieldValue("Database Name"),
+		Path:     m.getConnFormFieldValue("Path (SQLite)"),
+	}
+
+	switch newConn.Driver {
+	case "sqlite", "sqlite3", "postgres", "postgresql", "mysql":
+	case "":
 		m.err = fmt.Errorf("driver is required")
+		return m, nil
+	default:
+		m.err = fmt.Errorf("unsupported driver: %s", newConn.Driver)
 		return m, nil
 	}
 
 	m.config.Connections = append(m.config.Connections, newConn)
 
-	if err := config.Save("admin.yaml", m.config); err != nil {
+	if err := config.Save(m.configPath, m.config); err != nil {
 		m.err = err
 		return m, nil
 	}
@@ -720,16 +767,16 @@ func (m Model) View() string {
 	}
 
 	var connBox, sidebarBox, contentBox string
-	connWidth := m.width * 15 / 100
-	if connWidth < 20 {
-		connWidth = 20
+	connWidth := m.width * connPaneRatio / 100
+	if connWidth < minConnPaneWidth {
+		connWidth = minConnPaneWidth
 	}
-	tableWidth := m.width * 20 / 100
-	if tableWidth < 25 {
-		tableWidth = 25
+	tableWidth := m.width * tablePaneRatio / 100
+	if tableWidth < minTablePaneWidth {
+		tableWidth = minTablePaneWidth
 	}
-	contentWidth := m.width - connWidth - tableWidth - 4
-	availableHeight := m.height - 6
+	contentWidth := m.width - connWidth - tableWidth - horizontalPaddingTotal
+	availableHeight := m.height - verticalPaddingTotal
 
 	connHelp := lipgloss.NewStyle().Render(
 		fmt.Sprintf("%s %s",
@@ -768,7 +815,11 @@ func (m Model) View() string {
 		Foreground(DraculaComment).
 		Padding(0, 1)
 
-	status := fmt.Sprintf("%s %s | %s | ?: Help", "[Tables]", m.currentTable, m.statusMsg)
+	modeIndicator := "[View]"
+	if m.mode == ModeTableBrowser {
+		modeIndicator = "[Tables]"
+	}
+	status := fmt.Sprintf("%s %s | %s | ?: Help", modeIndicator, m.currentTable, m.statusMsg)
 	if m.err != nil {
 		status = fmt.Sprintf("❌ %s", m.err.Error())
 	}

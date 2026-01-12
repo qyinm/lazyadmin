@@ -81,7 +81,7 @@ func Load(path string) (*Config, error) {
 
 		if c.Port == 0 {
 			switch c.Driver {
-			case "postgres":
+			case "postgres", "postgresql":
 				c.Port = 5432
 			case "mysql":
 				c.Port = 3306
@@ -108,12 +108,24 @@ func Load(path string) (*Config, error) {
 // Save writes the configuration to the given file path.
 // It serializes the Config struct to YAML format.
 func Save(path string, cfg *Config) error {
-	data, err := yaml.Marshal(cfg)
+	type configToSave struct {
+		ProjectName string           `yaml:"project_name"`
+		Connections []DatabaseConfig `yaml:"connections"`
+		Views       []View           `yaml:"views"`
+	}
+
+	toSave := configToSave{
+		ProjectName: cfg.ProjectName,
+		Connections: cfg.Connections,
+		Views:       cfg.Views,
+	}
+
+	data, err := yaml.Marshal(&toSave)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
