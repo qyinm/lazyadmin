@@ -18,15 +18,15 @@ Every internal tool starts with "I just need to view this table" and ends with a
 
 ## Features
 
+- **Multi-Database Management**: Connect to and switch between multiple databases in a single session
 - **No-Code Admin Pages**: Define views with raw SQL queries in YAML
 - **CRUD Operations**: Create, Read, Update, and Delete records directly from the terminal
 - **Table Browser**: Explore database tables automatically without defining views
 - **Dynamic Schema**: Handles any table structure without hardcoded column names
-- **Multiple Databases**: SQLite, PostgreSQL, MySQL support
 - **SSH Tunnel**: Connect to remote databases through SSH
-- **Split-View Layout**: Sidebar navigation + data table view
-- **Dracula Theme**: Clean, dark mode interface
-- **Keyboard-Driven**: Full keyboard navigation support
+- **3-Pane Layout**: Connections sidebar + Tables sidebar + Data table view
+- **Universal Compatibility**: Uses standard ANSI 16-color palette and reverse-video for guaranteed rendering across all terminals (including Warp, iTerm2, etc.)
+- **Keyboard-Driven**: Full keyboard navigation with clear focus indicators (thick borders)
 
 ## Installation
 
@@ -50,6 +50,29 @@ go build -o lazyadmin .
 ```
 
 ## Configuration
+
+### Multi-Database Support
+
+You can now define multiple database connections in your configuration file.
+
+```yaml
+project_name: "My Dashboard"
+
+connections:
+  - label: "Production"
+    driver: postgres
+    host: prod-db.example.com
+    user: admin
+    name: main_db
+  
+  - label: "Local Dev"
+    driver: sqlite
+    path: "./local.db"
+
+views:
+  - title: "Active Users"
+    query: "SELECT * FROM users WHERE active = true"
+```
 
 ### SQLite
 
@@ -158,8 +181,9 @@ views:
 |-----|--------|
 | `j` / `↓` | Move down |
 | `k` / `↑` | Move up |
-| `Enter` | Execute query / Select |
-| `Tab` | Switch focus (Sidebar ↔ Table) |
+| `Enter` | Select connection / table |
+| `Tab` | Switch focus (Connections ↔ Tables ↔ Data Table) |
+| `n` | Add New Connection |
 | `t` | Toggle Mode (View / Table Browser) |
 | `i` | Insert Record (Table Browser Mode) |
 | `e` | Edit Record (Table Browser Mode) |
