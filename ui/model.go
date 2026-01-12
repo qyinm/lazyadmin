@@ -712,17 +712,18 @@ func (m Model) View() string {
 		tableWidth = 25
 	}
 	contentWidth := m.width - connWidth - tableWidth - 4
+	availableHeight := m.height - 6
 
 	if m.focus == FocusConnections {
-		connBox = SidebarActiveStyle.Width(connWidth).MaxWidth(connWidth).Render(m.connSidebar.View())
+		connBox = SidebarActiveStyle.Width(connWidth).MaxWidth(connWidth).Height(availableHeight).MaxHeight(availableHeight).Render(m.connSidebar.View())
 	} else {
-		connBox = SidebarStyle.Width(connWidth).MaxWidth(connWidth).Render(m.connSidebar.View())
+		connBox = SidebarStyle.Width(connWidth).MaxWidth(connWidth).Height(availableHeight).MaxHeight(availableHeight).Render(m.connSidebar.View())
 	}
 
 	if m.focus == FocusSidebar {
-		sidebarBox = SidebarActiveStyle.Width(tableWidth).MaxWidth(tableWidth).Render(m.sidebar.View())
+		sidebarBox = SidebarActiveStyle.Width(tableWidth).MaxWidth(tableWidth).Height(availableHeight).MaxHeight(availableHeight).Render(m.sidebar.View())
 	} else {
-		sidebarBox = SidebarStyle.Width(tableWidth).MaxWidth(tableWidth).Render(m.sidebar.View())
+		sidebarBox = SidebarStyle.Width(tableWidth).MaxWidth(tableWidth).Height(availableHeight).MaxHeight(availableHeight).Render(m.sidebar.View())
 	}
 
 	cStyle := ContentStyle
@@ -731,9 +732,9 @@ func (m Model) View() string {
 	}
 
 	if m.focus == FocusConfirm {
-		contentBox = cStyle.Width(contentWidth).MaxWidth(contentWidth).Render(m.renderConfirm())
+		contentBox = cStyle.Width(contentWidth).MaxWidth(contentWidth).Height(availableHeight).MaxHeight(availableHeight).Render(m.renderConfirm())
 	} else {
-		contentBox = cStyle.Width(contentWidth).MaxWidth(contentWidth).Render(m.renderContent())
+		contentBox = cStyle.Width(contentWidth).MaxWidth(contentWidth).Height(availableHeight).MaxHeight(availableHeight).Render(m.renderContent())
 	}
 
 	mainView := lipgloss.JoinHorizontal(lipgloss.Top, connBox, sidebarBox, contentBox)
