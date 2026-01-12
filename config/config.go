@@ -39,9 +39,9 @@ type Config struct {
 	Database    DatabaseConfig   `yaml:"database"` // Deprecated: used for backward compatibility
 	Connections []DatabaseConfig `yaml:"connections"`
 	Views       []View           `yaml:"views"`
-)
+}
 
-// Load reads and parses the configuration file at given path.
+// Load reads and parses the configuration file at the given path.
 // It handles backward compatibility for single database configurations
 // and validates all database connections, setting defaults where needed.
 func Load(path string) (*Config, error) {
@@ -105,6 +105,8 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
+// Save writes the configuration to the given file path.
+// It serializes the Config struct to YAML format.
 func Save(path string, cfg *Config) error {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
