@@ -210,24 +210,28 @@ func (m FormModel) IsCancelled() bool {
 	return m.cancelled
 }
 
-func (m FormModel) GetData() map[string]interface{} {
+func (m FormModel) GetData() (map[string]interface{}, error) {
 	data := make(map[string]interface{})
+	var missingRequired []string
+
 	for _, field := range m.fields {
 		value := strings.TrimSpace(field.Input.Value())
 
-		if value == "" && field.Column.Nullable {
+		if value == "" {
+			if !field.Column.Nullable && !field.Column.Default.Valid {
+				missingRequired = append(missingRequired, field.Column.Name)
+			}
 			continue
 		}
 
-		if value == "" && field.Column.Default.Valid {
-			continue
-		}
-
-		if value != "" {
-			data[field.Column.Name] = value
-		}
+		data[field.Column.Name] = value
 	}
-	return data
+
+	if len(missingRequired) > 0 {
+		return nil, fmt.Errorf("required fields missing: %s", strings.Join(missingRequired, ", "))
+	}
+
+	return data, nil
 }
 
 func (m FormModel) GetChangedData() map[string]interface{} {

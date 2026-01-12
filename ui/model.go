@@ -397,7 +397,14 @@ func (m Model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.form.IsSubmitted() {
 		if m.form.mode == FormModeInsert {
-			data := m.form.GetData()
+			data, err := m.form.GetData()
+			if err != nil {
+				m.err = err
+				m.statusMsg = "Validation failed: " + err.Error()
+				m.showForm = false
+				m.focus = FocusTable
+				return m, nil
+			}
 			if len(data) > 0 {
 				err := db.InsertRecord(m.db, m.driver, m.currentTable, data)
 				if err != nil {

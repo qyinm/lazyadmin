@@ -55,6 +55,10 @@ func GetTables(db *sql.DB, driver string) ([]TableInfo, error) {
 }
 
 func GetColumns(db *sql.DB, driver, tableName string) ([]ColumnInfo, error) {
+	return GetColumnsWithSchema(db, driver, tableName, "public")
+}
+
+func GetColumnsWithSchema(db *sql.DB, driver, tableName, schema string) ([]ColumnInfo, error) {
 	var query string
 	var args []interface{}
 
@@ -66,16 +70,23 @@ func GetColumns(db *sql.DB, driver, tableName string) ([]ColumnInfo, error) {
 					c.column_name,
 					c.data_type,
 					c.is_nullable = 'YES' as nullable,
-					COALESCE(tc.constraint_type = 'PRIMARY KEY', false) as is_pk,
+					EXISTS (
+						SELECT 1 
+						FROM information_schema.table_constraints tc
+						JOIN information_schema.key_column_usage kcu 
+							ON tc.constraint_name = kcu.constraint_name
+							AND tc.table_schema = kcu.table_schema
+							AND tc.table_name = kcu.table_name
+						WHERE tc.constraint_type = 'PRIMARY KEY'
+							AND tc.table_schema = c.table_schema
+							AND tc.table_name = c.table_name
+							AND kcu.column_name = c.column_name
+					) as is_pk,
 					c.column_default
 				FROM information_schema.columns c
-				LEFT JOIN information_schema.key_column_usage kcu 
-					ON c.table_name = kcu.table_name AND c.column_name = kcu.column_name
-				LEFT JOIN information_schema.table_constraints tc 
-					ON kcu.constraint_name = tc.constraint_name AND tc.constraint_type = 'PRIMARY KEY'
-				WHERE c.table_name = $1
+				WHERE c.table_name = $1 AND c.table_schema = $2
 				ORDER BY c.ordinal_position`
-		args = []interface{}{tableName}
+		args = []interface{}{tableName, schema}
 	case driver == "mysql":
 		query = `SELECT 
 					COLUMN_NAME,
