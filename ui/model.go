@@ -100,6 +100,13 @@ func NewModel(cfg *config.Config, database *sql.DB) Model {
 
 	tableDelegate := list.NewDefaultDelegate()
 	tableDelegate.ShowDescription = false
+	tableDelegate.Styles.SelectedTitle = tableDelegate.Styles.SelectedTitle.
+		Foreground(DraculaPink).
+		Background(DraculaBackground).
+		Bold(true)
+	tableDelegate.Styles.SelectedDesc = tableDelegate.Styles.SelectedDesc.
+		Foreground(DraculaComment).
+		Background(DraculaBackground)
 	tableList := list.New([]list.Item{}, tableDelegate, 0, 0)
 	tableList.Title = "Tables"
 	tableList.SetShowHelp(false)
