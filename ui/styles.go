@@ -14,22 +14,26 @@ var (
 	SidebarStyle = lipgloss.NewStyle().
 			Padding(1, 2).
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(DraculaPurple)
+			BorderForeground(DraculaPurple).
+			Background(DraculaBackground)
 
 	SidebarActiveStyle = lipgloss.NewStyle().
 				Padding(1, 2).
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(DraculaGreen)
+				BorderForeground(DraculaGreen).
+				Background(DraculaBackground)
 
 	ContentStyle = lipgloss.NewStyle().
 			Padding(1, 2).
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(DraculaCyan)
+			BorderForeground(DraculaCyan).
+			Background(DraculaBackground)
 
 	ContentActiveStyle = lipgloss.NewStyle().
 				Padding(1, 2).
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(DraculaGreen)
+				BorderForeground(DraculaGreen).
+				Background(DraculaBackground)
 
 	TitleStyle = lipgloss.NewStyle().
 			Foreground(DraculaPink).

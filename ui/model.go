@@ -66,11 +66,14 @@ func NewModel(cfg *config.Config, database *sql.DB) Model {
 		BorderForeground(DraculaPurple).
 		BorderBottom(true).
 		Bold(true).
-		Foreground(DraculaCyan)
+		Foreground(DraculaCyan).
+		Background(DraculaBackground)
 	s.Selected = s.Selected.
 		Foreground(DraculaBackground).
 		Background(DraculaPurple).
 		Bold(false)
+	s.Cell = s.Cell.
+		Background(DraculaBackground)
 	t.SetStyles(s)
 
 	return Model{
@@ -491,7 +494,8 @@ func (m Model) View() string {
 		formStyle := lipgloss.NewStyle().
 			Padding(2, 4).
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(DraculaGreen)
+			BorderForeground(DraculaGreen).
+			Background(DraculaBackground)
 
 		return formStyle.Render(m.form.View())
 	}
@@ -548,6 +552,7 @@ func (m Model) renderContent() string {
 func (m Model) renderConfirm() string {
 	confirmStyle := lipgloss.NewStyle().
 		Foreground(DraculaPink).
+		Background(DraculaBackground).
 		Bold(true).
 		Padding(2)
 
