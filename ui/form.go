@@ -24,17 +24,16 @@ type FormField struct {
 }
 
 type FormModel struct {
-	fields      []FormField
-	focusIndex  int
-	mode        FormMode
-	tableName   string
-	pkColumn    string
-	pkValue     interface{}
-	width       int
-	height      int
-	submitted   bool
-	cancelled   bool
-	err         error
+	fields     []FormField
+	focusIndex int
+	mode       FormMode
+	tableName  string
+	pkColumn   string
+	pkValue    interface{}
+	width      int
+	height     int
+	submitted  bool
+	cancelled  bool
 }
 
 func NewFormModel(columns []db.ColumnInfo, mode FormMode, tableName, pkColumn string, pkValue interface{}, existingData map[string]interface{}) FormModel {

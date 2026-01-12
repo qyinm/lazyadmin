@@ -2,6 +2,7 @@ package ui
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -29,26 +30,26 @@ const (
 )
 
 type Model struct {
-	config       *config.Config
-	db           *sql.DB
-	driver       string
-	sidebar      list.Model
-	table        table.Model
-	focus        Focus
-	mode         Mode
-	width        int
-	height       int
-	tableLoaded  bool
-	err          error
-	statusMsg    string
-	currentTable string
-	pkColumn     string
-	columns      []db.ColumnInfo
-	form         FormModel
-	showForm     bool
-	confirmMsg   string
+	config        *config.Config
+	db            *sql.DB
+	driver        string
+	sidebar       list.Model
+	table         table.Model
+	focus         Focus
+	mode          Mode
+	width         int
+	height        int
+	tableLoaded   bool
+	err           error
+	statusMsg     string
+	currentTable  string
+	pkColumn      string
+	columns       []db.ColumnInfo
+	form          FormModel
+	showForm      bool
+	confirmMsg    string
 	confirmAction func()
-	tables       []db.TableInfo
+	tables        []db.TableInfo
 }
 
 func NewModel(cfg *config.Config, database *sql.DB) Model {
@@ -160,6 +161,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		sidebarWidth := m.width * 30 / 100
 		contentWidth := m.width - sidebarWidth - 8
 
+		if m.mode == ModeTableBrowser && m.tables == nil {
+			tables, err := db.GetTables(m.db, m.driver)
+			if err == nil {
+				m.tables = tables
+			}
+		}
+
 		m.sidebar = m.buildSidebar(sidebarWidth-4, m.height-6)
 		m.sidebar.Title = m.config.ProjectName
 		m.sidebar.Styles.Title = TitleStyle
@@ -183,12 +191,6 @@ func (m Model) buildSidebar(width, height int) list.Model {
 	var items []list.Item
 
 	if m.mode == ModeTableBrowser {
-		if m.tables == nil {
-			tables, err := db.GetTables(m.db, m.driver)
-			if err == nil {
-				m.tables = tables
-			}
-		}
 		for _, t := range m.tables {
 			items = append(items, ViewItem{
 				title:       "📋 " + t.Name,
@@ -233,10 +235,18 @@ func (m Model) handleSidebarSelect() (tea.Model, tea.Cmd) {
 		}
 		m.columns = columns
 
-		pkCol, _ := db.GetPrimaryKey(m.db, m.driver, m.currentTable)
+		pkCol, err := db.GetPrimaryKey(m.db, m.driver, m.currentTable)
+		if err != nil {
+			if errors.Is(err, db.ErrNoPrimaryKey) {
+				m.statusMsg = fmt.Sprintf("Warning: %s has no primary key", m.currentTable)
+			} else {
+				m.err = err
+				return m, nil
+			}
+		}
 		m.pkColumn = pkCol
 
-		query := fmt.Sprintf("SELECT * FROM %s LIMIT 100", m.currentTable)
+		query := db.BuildSelectAllQuery(m.driver, m.currentTable, 100)
 		return m.executeQuery(query)
 	}
 
@@ -264,7 +274,7 @@ func (m Model) refreshTable() (tea.Model, tea.Cmd) {
 	if m.currentTable == "" {
 		return m, nil
 	}
-	query := fmt.Sprintf("SELECT * FROM %s LIMIT 100", m.currentTable)
+	query := db.BuildSelectAllQuery(m.driver, m.currentTable, 100)
 	m.statusMsg = "Refreshing..."
 	return m.executeQuery(query)
 }

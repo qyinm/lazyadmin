@@ -21,14 +21,14 @@ type ColumnInfo struct {
 func GetTables(db *sql.DB, driver string) ([]TableInfo, error) {
 	var query string
 
-	switch driver {
-	case "sqlite", "sqlite3", "":
+	switch {
+	case isSQLite(driver):
 		query = `SELECT name, '' as schema FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`
-	case "postgres", "postgresql":
+	case driver == "postgres" || driver == "postgresql":
 		query = `SELECT table_name, table_schema FROM information_schema.tables 
 				 WHERE table_schema NOT IN ('pg_catalog', 'information_schema') 
 				 ORDER BY table_schema, table_name`
-	case "mysql":
+	case driver == "mysql":
 		query = `SELECT table_name, table_schema FROM information_schema.tables 
 				 WHERE table_schema = DATABASE() 
 				 ORDER BY table_name`
@@ -58,10 +58,10 @@ func GetColumns(db *sql.DB, driver, tableName string) ([]ColumnInfo, error) {
 	var query string
 	var args []interface{}
 
-	switch driver {
-	case "sqlite", "sqlite3", "":
-		query = fmt.Sprintf(`PRAGMA table_info('%s')`, tableName)
-	case "postgres", "postgresql":
+	switch {
+	case isSQLite(driver):
+		query = fmt.Sprintf(`PRAGMA table_info('%s')`, EscapeSQLiteString(tableName))
+	case driver == "postgres" || driver == "postgresql":
 		query = `SELECT 
 					c.column_name,
 					c.data_type,
@@ -76,7 +76,7 @@ func GetColumns(db *sql.DB, driver, tableName string) ([]ColumnInfo, error) {
 				WHERE c.table_name = $1
 				ORDER BY c.ordinal_position`
 		args = []interface{}{tableName}
-	case "mysql":
+	case driver == "mysql":
 		query = `SELECT 
 					COLUMN_NAME,
 					DATA_TYPE,
@@ -99,7 +99,7 @@ func GetColumns(db *sql.DB, driver, tableName string) ([]ColumnInfo, error) {
 
 	var columns []ColumnInfo
 
-	if driver == "sqlite" || driver == "sqlite3" || driver == "" {
+	if isSQLite(driver) {
 		for rows.Next() {
 			var cid int
 			var name, colType string
@@ -129,6 +129,8 @@ func GetColumns(db *sql.DB, driver, tableName string) ([]ColumnInfo, error) {
 	return columns, rows.Err()
 }
 
+var ErrNoPrimaryKey = fmt.Errorf("no primary key found")
+
 func GetPrimaryKey(db *sql.DB, driver, tableName string) (string, error) {
 	columns, err := GetColumns(db, driver, tableName)
 	if err != nil {
@@ -141,5 +143,5 @@ func GetPrimaryKey(db *sql.DB, driver, tableName string) (string, error) {
 		}
 	}
 
-	return "", nil
+	return "", fmt.Errorf("%w for table %q", ErrNoPrimaryKey, tableName)
 }

@@ -3,14 +3,15 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 )
 
-func SelectAll(db *sql.DB, tableName string, limit int) (string, error) {
+func BuildSelectAllQuery(driver, tableName string, limit int) string {
 	if limit <= 0 {
 		limit = 100
 	}
-	return fmt.Sprintf("SELECT * FROM %s LIMIT %d", tableName, limit), nil
+	return fmt.Sprintf("SELECT * FROM %s LIMIT %d", QuoteIdentifier(driver, tableName), limit)
 }
 
 func InsertRecord(db *sql.DB, driver, tableName string, data map[string]interface{}) error {
@@ -18,26 +19,30 @@ func InsertRecord(db *sql.DB, driver, tableName string, data map[string]interfac
 		return fmt.Errorf("no data to insert")
 	}
 
+	sortedKeys := make([]string, 0, len(data))
+	for col := range data {
+		sortedKeys = append(sortedKeys, col)
+	}
+	sort.Strings(sortedKeys)
+
 	columns := make([]string, 0, len(data))
 	placeholders := make([]string, 0, len(data))
 	values := make([]interface{}, 0, len(data))
 
-	i := 1
-	for col, val := range data {
-		columns = append(columns, col)
-		values = append(values, val)
+	for i, col := range sortedKeys {
+		columns = append(columns, QuoteIdentifier(driver, col))
+		values = append(values, data[col])
 
 		switch driver {
 		case "postgres", "postgresql":
-			placeholders = append(placeholders, fmt.Sprintf("$%d", i))
+			placeholders = append(placeholders, fmt.Sprintf("$%d", i+1))
 		default:
 			placeholders = append(placeholders, "?")
 		}
-		i++
 	}
 
 	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
-		tableName,
+		QuoteIdentifier(driver, tableName),
 		strings.Join(columns, ", "),
 		strings.Join(placeholders, ", "))
 
@@ -50,36 +55,40 @@ func UpdateRecord(db *sql.DB, driver, tableName, pkColumn string, pkValue interf
 		return fmt.Errorf("no data to update")
 	}
 
+	sortedKeys := make([]string, 0, len(data))
+	for col := range data {
+		sortedKeys = append(sortedKeys, col)
+	}
+	sort.Strings(sortedKeys)
+
 	setClauses := make([]string, 0, len(data))
 	values := make([]interface{}, 0, len(data)+1)
 
-	i := 1
-	for col, val := range data {
+	for i, col := range sortedKeys {
 		var placeholder string
 		switch driver {
 		case "postgres", "postgresql":
-			placeholder = fmt.Sprintf("$%d", i)
+			placeholder = fmt.Sprintf("$%d", i+1)
 		default:
 			placeholder = "?"
 		}
-		setClauses = append(setClauses, fmt.Sprintf("%s = %s", col, placeholder))
-		values = append(values, val)
-		i++
+		setClauses = append(setClauses, fmt.Sprintf("%s = %s", QuoteIdentifier(driver, col), placeholder))
+		values = append(values, data[col])
 	}
 
 	var pkPlaceholder string
 	switch driver {
 	case "postgres", "postgresql":
-		pkPlaceholder = fmt.Sprintf("$%d", i)
+		pkPlaceholder = fmt.Sprintf("$%d", len(data)+1)
 	default:
 		pkPlaceholder = "?"
 	}
 	values = append(values, pkValue)
 
 	query := fmt.Sprintf("UPDATE %s SET %s WHERE %s = %s",
-		tableName,
+		QuoteIdentifier(driver, tableName),
 		strings.Join(setClauses, ", "),
-		pkColumn,
+		QuoteIdentifier(driver, pkColumn),
 		pkPlaceholder)
 
 	result, err := db.Exec(query, values...)
@@ -108,7 +117,10 @@ func DeleteRecord(db *sql.DB, driver, tableName, pkColumn string, pkValue interf
 		placeholder = "?"
 	}
 
-	query := fmt.Sprintf("DELETE FROM %s WHERE %s = %s", tableName, pkColumn, placeholder)
+	query := fmt.Sprintf("DELETE FROM %s WHERE %s = %s",
+		QuoteIdentifier(driver, tableName),
+		QuoteIdentifier(driver, pkColumn),
+		placeholder)
 
 	result, err := db.Exec(query, pkValue)
 	if err != nil {
@@ -136,7 +148,10 @@ func GetRecordByPK(db *sql.DB, driver, tableName, pkColumn string, pkValue inter
 		placeholder = "?"
 	}
 
-	query := fmt.Sprintf("SELECT * FROM %s WHERE %s = %s", tableName, pkColumn, placeholder)
+	query := fmt.Sprintf("SELECT * FROM %s WHERE %s = %s",
+		QuoteIdentifier(driver, tableName),
+		QuoteIdentifier(driver, pkColumn),
+		placeholder)
 
 	rows, err := db.Query(query, pkValue)
 	if err != nil {
