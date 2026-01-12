@@ -1,0 +1,18 @@
+project_name: "PostgreSQL Direct Test"
+
+database:
+  driver: postgres
+  host: localhost
+  port: 5433
+  user: admin
+  password: secret
+  name: testdb
+
+views:
+  - title: "All Users"
+    description: "View all registered users"
+    query: "SELECT id, email, role, created_at FROM users"
+
+  - title: "Payments"
+    description: "All payment transactions"
+    query: "SELECT id, amount, currency, status FROM payments"

@@ -90,6 +90,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.err = err
 						return m, nil
 					}
+					m.table.SetRows([]table.Row{})
 					m.table.SetColumns(cols)
 					m.table.SetRows(rows)
 					m.tableLoaded = true

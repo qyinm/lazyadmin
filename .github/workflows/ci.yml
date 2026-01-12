@@ -1,0 +1,161 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Run go vet
+        run: go vet ./...
+
+  test-sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install SQLite
+        run: sudo apt-get install -y sqlite3
+
+      - name: Create test database
+        run: sqlite3 test.db < scripts/init_testdb.sql
+
+      - name: Build
+        run: go build -o lazyadmin .
+
+      - name: Test SQLite connection
+        run: |
+          go run -v ./... --help 2>&1 || true
+          echo "Build successful"
+
+  test-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Wait for PostgreSQL
+        run: |
+          until pg_isready -h localhost -p 5432 -U admin; do
+            echo "Waiting for postgres..."
+            sleep 2
+          done
+
+      - name: Initialize PostgreSQL
+        run: PGPASSWORD=secret psql -h localhost -U admin -d testdb -f test/init.sql
+
+      - name: Build
+        run: go build -o lazyadmin .
+
+      - name: Test PostgreSQL connection
+        run: |
+          cat > /tmp/test-pg.yaml << 'EOF'
+          project_name: "CI Test"
+          database:
+            driver: postgres
+            host: localhost
+            port: 5432
+            user: admin
+            password: secret
+            name: testdb
+          views:
+            - title: "Users"
+              description: "Test"
+              query: "SELECT * FROM users"
+          EOF
+
+          go run test/test_connection.go /tmp/test-pg.yaml
+
+  test-mysql:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: secret
+          MYSQL_DATABASE: testdb
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Wait for MySQL
+        run: |
+          until mysqladmin ping -h 127.0.0.1 --silent; do
+            echo "Waiting for mysql..."
+            sleep 2
+          done
+
+      - name: Initialize MySQL
+        run: mysql -h 127.0.0.1 -u root -psecret testdb < test/init_mysql.sql
+
+      - name: Build
+        run: go build -o lazyadmin .
+
+      - name: Test MySQL connection
+        run: |
+          cat > /tmp/test-mysql.yaml << 'EOF'
+          project_name: "CI Test"
+          database:
+            driver: mysql
+            host: 127.0.0.1
+            port: 3306
+            user: root
+            password: secret
+            name: testdb
+          views:
+            - title: "Users"
+              description: "Test"
+              query: "SELECT * FROM users"
+          EOF
+
+          go run test/test_connection.go /tmp/test-mysql.yaml

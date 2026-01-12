@@ -1,0 +1,23 @@
+project_name: "SSH Test Admin"
+
+database:
+  driver: postgres
+  host: postgres
+  port: 5432
+  user: admin
+  password: secret
+  name: testdb
+  ssh:
+    host: localhost
+    port: 2222
+    user: root
+    password: root
+
+views:
+  - title: "All Users"
+    description: "View all registered users"
+    query: "SELECT id, email, role, created_at FROM users"
+
+  - title: "Payments"
+    description: "All payment transactions"
+    query: "SELECT id, amount, currency, status FROM payments"

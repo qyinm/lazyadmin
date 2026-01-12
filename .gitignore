@@ -1,0 +1,31 @@
+# Binary
+lazyadmin
+lazyadmin.exe
+
+# Test database
+test.db
+*.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test configs with credentials
+test/admin-newsletter.yaml
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
