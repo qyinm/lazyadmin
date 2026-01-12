@@ -9,7 +9,7 @@ var (
 	DraculaPink       = lipgloss.Color("13")
 	DraculaCyan       = lipgloss.Color("14")
 	DraculaGreen      = lipgloss.Color("10")
-	DraculaComment    = lipgloss.Color("8")
+	DraculaComment    = lipgloss.Color("7")
 
 	SidebarStyle = lipgloss.NewStyle().
 			Padding(0, 1).
@@ -48,4 +48,12 @@ var (
 	AppStyle = lipgloss.NewStyle().
 			Background(DraculaBackground).
 			Foreground(DraculaForeground)
+
+	HelpKeyStyle = lipgloss.NewStyle().
+			Foreground(DraculaPink).
+			Bold(true)
+
+	HelpDescStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("255")).
+			Bold(true)
 )

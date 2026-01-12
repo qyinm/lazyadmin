@@ -274,13 +274,15 @@ func (m *Model) resizePanes() {
 
 	contentWidth := m.width - connWidth - tableWidth - 4
 
-	listHeight := m.height - 4
+	panelHeight := m.height - 6
+	contentHeight := panelHeight - 2
 
-	m.connSidebar.SetSize(connWidth-4, listHeight)
-	m.sidebar.SetSize(tableWidth-4, listHeight)
+	m.connSidebar.SetSize(connWidth-4, contentHeight-1)
+
+	m.sidebar.SetSize(tableWidth-4, contentHeight)
 
 	m.table.SetWidth(contentWidth - 4)
-	m.table.SetHeight(m.height - 8)
+	m.table.SetHeight(contentHeight)
 }
 
 func (m Model) handleConnectionSelect() (tea.Model, tea.Cmd) {
@@ -725,10 +727,18 @@ func (m Model) View() string {
 	contentWidth := m.width - connWidth - tableWidth - 4
 	availableHeight := m.height - 6
 
+	connHelp := lipgloss.NewStyle().Render(
+		fmt.Sprintf("%s %s",
+			HelpKeyStyle.Render("n"),
+			HelpDescStyle.Render("new conn"),
+		),
+	)
+	connContent := lipgloss.JoinVertical(lipgloss.Left, m.connSidebar.View(), connHelp)
+
 	if m.focus == FocusConnections {
-		connBox = SidebarActiveStyle.Width(connWidth).MaxWidth(connWidth).Height(availableHeight).MaxHeight(availableHeight).Render(m.connSidebar.View())
+		connBox = SidebarActiveStyle.Width(connWidth).MaxWidth(connWidth).Height(availableHeight).MaxHeight(availableHeight).Render(connContent)
 	} else {
-		connBox = SidebarStyle.Width(connWidth).MaxWidth(connWidth).Height(availableHeight).MaxHeight(availableHeight).Render(m.connSidebar.View())
+		connBox = SidebarStyle.Width(connWidth).MaxWidth(connWidth).Height(availableHeight).MaxHeight(availableHeight).Render(connContent)
 	}
 
 	if m.focus == FocusSidebar {
