@@ -225,6 +225,26 @@ func (m Model) handleSidebarSelect() (tea.Model, tea.Cmd) {
 	}
 
 	if item.isTable {
+		validTable := false
+		if m.tables == nil {
+			tables, err := db.GetTables(m.db, m.driver)
+			if err == nil {
+				m.tables = tables
+			}
+		}
+
+		for _, t := range m.tables {
+			if t.Name == item.query {
+				validTable = true
+				break
+			}
+		}
+
+		if !validTable {
+			m.err = fmt.Errorf("invalid table name: %s", item.query)
+			return m, nil
+		}
+
 		m.currentTable = item.query
 		m.mode = ModeTableBrowser
 

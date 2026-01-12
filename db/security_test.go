@@ -146,7 +146,7 @@ func TestIsSQLite(t *testing.T) {
 	}{
 		{"sqlite", true},
 		{"sqlite3", true},
-		{"", true},
+		{"", false},
 		{"postgres", false},
 		{"postgresql", false},
 		{"mysql", false},

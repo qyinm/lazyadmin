@@ -64,6 +64,22 @@ func GetColumnsWithSchema(db *sql.DB, driver, tableName, schema string) ([]Colum
 
 	switch {
 	case isSQLite(driver):
+		tables, err := GetTables(db, driver)
+		if err != nil {
+			return nil, err
+		}
+
+		found := false
+		for _, t := range tables {
+			if t.Name == tableName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("table %q not found", tableName)
+		}
+
 		query = fmt.Sprintf(`PRAGMA table_info('%s')`, EscapeSQLiteString(tableName))
 	case driver == "postgres" || driver == "postgresql":
 		query = `SELECT 
