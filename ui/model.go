@@ -256,16 +256,24 @@ func (m *Model) resizePanes() {
 		return
 	}
 
-	connWidth := m.width * 20 / 100
-	tableWidth := m.width * 20 / 100
+	connWidth := m.width * 15 / 100
+	if connWidth < 20 {
+		connWidth = 20
+	}
+
+	tableWidth := m.width * 25 / 100
+	if tableWidth < 30 {
+		tableWidth = 30
+	}
+
 	contentWidth := m.width - connWidth - tableWidth - 6
 
 	listHeight := m.height - 4
 
-	m.connSidebar.SetSize(connWidth-2, listHeight)
-	m.sidebar.SetSize(tableWidth-2, listHeight)
+	m.connSidebar.SetSize(connWidth-6, listHeight)
+	m.sidebar.SetSize(tableWidth-6, listHeight)
 
-	m.table.SetWidth(contentWidth - 2)
+	m.table.SetWidth(contentWidth - 6)
 	m.table.SetHeight(m.height - 8)
 }
 
