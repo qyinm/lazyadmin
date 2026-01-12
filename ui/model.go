@@ -98,7 +98,9 @@ func NewModel(cfg *config.Config, database *sql.DB) Model {
 	connList.SetFilteringEnabled(false)
 	connList.Styles.Title = TitleStyle
 
-	tableList := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
+	tableDelegate := list.NewDefaultDelegate()
+	tableDelegate.ShowDescription = false
+	tableList := list.New([]list.Item{}, tableDelegate, 0, 0)
 	tableList.Title = "Tables"
 	tableList.SetShowHelp(false)
 	tableList.SetShowStatusBar(false)
@@ -261,19 +263,19 @@ func (m *Model) resizePanes() {
 		connWidth = 20
 	}
 
-	tableWidth := m.width * 25 / 100
-	if tableWidth < 30 {
-		tableWidth = 30
+	tableWidth := m.width * 20 / 100
+	if tableWidth < 25 {
+		tableWidth = 25
 	}
 
-	contentWidth := m.width - connWidth - tableWidth - 6
+	contentWidth := m.width - connWidth - tableWidth - 4
 
 	listHeight := m.height - 4
 
-	m.connSidebar.SetSize(connWidth-6, listHeight)
-	m.sidebar.SetSize(tableWidth-6, listHeight)
+	m.connSidebar.SetSize(connWidth-4, listHeight)
+	m.sidebar.SetSize(tableWidth-4, listHeight)
 
-	m.table.SetWidth(contentWidth - 6)
+	m.table.SetWidth(contentWidth - 4)
 	m.table.SetHeight(m.height - 8)
 }
 
@@ -701,25 +703,37 @@ func (m Model) View() string {
 	}
 
 	var connBox, sidebarBox, contentBox string
+	connWidth := m.width * 15 / 100
+	if connWidth < 20 {
+		connWidth = 20
+	}
+	tableWidth := m.width * 20 / 100
+	if tableWidth < 25 {
+		tableWidth = 25
+	}
+	contentWidth := m.width - connWidth - tableWidth - 4
 
 	if m.focus == FocusConnections {
-		connBox = SidebarActiveStyle.Render(m.connSidebar.View())
+		connBox = SidebarActiveStyle.Width(connWidth).MaxWidth(connWidth).Render(m.connSidebar.View())
 	} else {
-		connBox = SidebarStyle.Render(m.connSidebar.View())
+		connBox = SidebarStyle.Width(connWidth).MaxWidth(connWidth).Render(m.connSidebar.View())
 	}
 
 	if m.focus == FocusSidebar {
-		sidebarBox = SidebarActiveStyle.Render(m.sidebar.View())
+		sidebarBox = SidebarActiveStyle.Width(tableWidth).MaxWidth(tableWidth).Render(m.sidebar.View())
 	} else {
-		sidebarBox = SidebarStyle.Render(m.sidebar.View())
+		sidebarBox = SidebarStyle.Width(tableWidth).MaxWidth(tableWidth).Render(m.sidebar.View())
+	}
+
+	cStyle := ContentStyle
+	if m.focus == FocusTable || m.focus == FocusForm || m.focus == FocusConfirm {
+		cStyle = ContentActiveStyle
 	}
 
 	if m.focus == FocusConfirm {
-		contentBox = ContentActiveStyle.Render(m.renderConfirm())
-	} else if m.focus == FocusTable || m.focus == FocusForm {
-		contentBox = ContentActiveStyle.Render(m.renderContent())
+		contentBox = cStyle.Width(contentWidth).MaxWidth(contentWidth).Render(m.renderConfirm())
 	} else {
-		contentBox = ContentStyle.Render(m.renderContent())
+		contentBox = cStyle.Width(contentWidth).MaxWidth(contentWidth).Render(m.renderContent())
 	}
 
 	mainView := lipgloss.JoinHorizontal(lipgloss.Top, connBox, sidebarBox, contentBox)
