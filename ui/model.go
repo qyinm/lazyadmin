@@ -295,6 +295,10 @@ func (m Model) handleConnectionSelect() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		if m.db != nil {
+			m.db.Close()
+		}
+
 		m.db = conn.DB
 		m.driver = connConfig.Driver
 		m.tables = nil
