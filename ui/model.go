@@ -63,7 +63,7 @@ func NewModel(cfg *config.Config, database *sql.DB) Model {
 	t := table.New(
 		table.WithColumns([]table.Column{}),
 		table.WithRows([]table.Row{}),
-		table.WithFocused(false),
+		table.WithFocused(true),
 		table.WithHeight(10),
 	)
 
@@ -75,12 +75,10 @@ func NewModel(cfg *config.Config, database *sql.DB) Model {
 		Bold(true).
 		Foreground(DraculaCyan).
 		Background(DraculaBackground)
-	s.Selected = s.Selected.
-		Foreground(DraculaBackground).
-		Background(DraculaPurple).
-		Bold(false)
-	s.Cell = s.Cell.
-		Background(DraculaBackground)
+	s.Selected = lipgloss.NewStyle().
+		Bold(true).
+		Reverse(true)
+	s.Cell = lipgloss.NewStyle()
 	t.SetStyles(s)
 
 	var connItems []list.Item
@@ -190,10 +188,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focus = FocusSidebar
 			case FocusSidebar:
 				m.focus = FocusTable
-				m.table.Focus()
 			case FocusTable:
 				m.focus = FocusConnections
-				m.table.Blur()
 			}
 			return m, nil
 
@@ -202,6 +198,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.handleConnectionSelect()
 			}
 			if m.focus == FocusSidebar {
+				m.focus = FocusTable
 				return m.handleSidebarSelect()
 			}
 			return m, nil
@@ -491,6 +488,9 @@ func (m Model) executeQuery(query string) (tea.Model, tea.Cmd) {
 	m.table.SetRows([]table.Row{})
 	m.table.SetColumns(cols)
 	m.table.SetRows(rows)
+	if len(rows) > 0 {
+		m.table.SetCursor(0)
+	}
 	m.tableLoaded = true
 	m.err = nil
 	m.statusMsg = fmt.Sprintf("Loaded %d rows", len(rows))
@@ -706,7 +706,11 @@ func (m Model) View() string {
 			BorderForeground(DraculaGreen).
 			Background(DraculaBackground)
 
-		return formStyle.Render(m.form.View())
+		return AppStyle.Width(m.width).Height(m.height).Render(
+			lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
+				formStyle.Render(m.viewForm()),
+			),
+		)
 	}
 
 	var connBox, sidebarBox, contentBox string
@@ -792,4 +796,8 @@ func (m Model) renderConfirm() string {
 		Padding(2)
 
 	return confirmStyle.Render(m.confirmMsg)
+}
+
+func (m Model) viewForm() string {
+	return m.form.View()
 }

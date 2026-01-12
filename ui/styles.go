@@ -3,24 +3,24 @@ package ui
 import "github.com/charmbracelet/lipgloss"
 
 var (
-	DraculaBackground = lipgloss.Color("#282a36")
-	DraculaForeground = lipgloss.Color("#f8f8f2")
-	DraculaPurple     = lipgloss.Color("#bd93f9")
-	DraculaPink       = lipgloss.Color("#ff79c6")
-	DraculaCyan       = lipgloss.Color("#8be9fd")
-	DraculaGreen      = lipgloss.Color("#50fa7b")
-	DraculaComment    = lipgloss.Color("#6272a4")
+	DraculaBackground = lipgloss.Color("0")
+	DraculaForeground = lipgloss.Color("15")
+	DraculaPurple     = lipgloss.Color("5")
+	DraculaPink       = lipgloss.Color("13")
+	DraculaCyan       = lipgloss.Color("14")
+	DraculaGreen      = lipgloss.Color("10")
+	DraculaComment    = lipgloss.Color("8")
 
 	SidebarStyle = lipgloss.NewStyle().
-			Padding(1, 2).
+			Padding(0, 1).
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(DraculaPurple).
 			Background(DraculaBackground)
 
 	SidebarActiveStyle = lipgloss.NewStyle().
-				Padding(1, 2).
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(DraculaGreen).
+				Padding(0, 1).
+				Border(lipgloss.ThickBorder()).
+				BorderForeground(DraculaPink).
 				Background(DraculaBackground)
 
 	ContentStyle = lipgloss.NewStyle().
@@ -31,8 +31,8 @@ var (
 
 	ContentActiveStyle = lipgloss.NewStyle().
 				Padding(1, 2).
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(DraculaGreen).
+				Border(lipgloss.ThickBorder()).
+				BorderForeground(DraculaPink).
 				Background(DraculaBackground)
 
 	TitleStyle = lipgloss.NewStyle().
