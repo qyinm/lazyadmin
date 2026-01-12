@@ -39,8 +39,11 @@ type Config struct {
 	Database    DatabaseConfig   `yaml:"database"` // Deprecated: used for backward compatibility
 	Connections []DatabaseConfig `yaml:"connections"`
 	Views       []View           `yaml:"views"`
-}
+)
 
+// Load reads and parses the configuration file at given path.
+// It handles backward compatibility for single database configurations
+// and validates all database connections, setting defaults where needed.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
