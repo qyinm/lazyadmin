@@ -106,7 +106,7 @@ func Load(path string) (*Config, error) {
 }
 
 // Save writes the configuration to the given file path.
-// It serializes the Config struct to YAML format.
+// Uses atomic write (temp file + rename) to prevent corruption.
 func Save(path string, cfg *Config) error {
 	type configToSave struct {
 		ProjectName string           `yaml:"project_name"`
@@ -125,8 +125,13 @@ func Save(path string, cfg *Config) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to finalize config file: %w", err)
 	}
 
 	return nil

@@ -54,6 +54,6 @@ var (
 			Bold(true)
 
 	HelpDescStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("255")).
+			Foreground(lipgloss.Color("15")).
 			Bold(true)
 )
