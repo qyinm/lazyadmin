@@ -298,9 +298,15 @@ func (m *Model) resizePanes() {
 	}
 
 	contentWidth := m.width - connWidth - tableWidth - horizontalPaddingTotal
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
 
 	panelHeight := m.height - verticalPaddingTotal
 	contentHeight := panelHeight - 2
+	if contentHeight < 0 {
+		contentHeight = 0
+	}
 
 	m.connSidebar.SetSize(connWidth-horizontalPaddingTotal, contentHeight-1)
 	m.sidebar.SetSize(tableWidth-horizontalPaddingTotal, contentHeight)
@@ -442,6 +448,11 @@ func (m Model) submitConnectionForm() (tea.Model, tea.Cmd) {
 		return m, nil
 	default:
 		m.err = fmt.Errorf("unsupported driver: %s", newConn.Driver)
+		return m, nil
+	}
+
+	if newConn.Label == "" {
+		m.err = fmt.Errorf("label is required")
 		return m, nil
 	}
 
