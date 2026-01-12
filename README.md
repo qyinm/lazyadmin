@@ -5,6 +5,8 @@ A config-driven TUI (Terminal User Interface) database admin engine. Generate a 
 ## Features
 
 - **No-Code Admin Pages**: Define views with raw SQL queries in YAML
+- **CRUD Operations**: Create, Read, Update, and Delete records directly from the terminal
+- **Table Browser**: Explore database tables automatically without defining views
 - **Dynamic Schema**: Handles any table structure without hardcoded column names
 - **Multiple Databases**: SQLite, PostgreSQL, MySQL support
 - **SSH Tunnel**: Connect to remote databases through SSH
@@ -144,6 +146,11 @@ views:
 | `k` / `↑` | Move up |
 | `Enter` | Execute query / Select |
 | `Tab` | Switch focus (Sidebar ↔ Table) |
+| `t` | Toggle Mode (View / Table Browser) |
+| `i` | Insert Record (Table Browser Mode) |
+| `e` | Edit Record (Table Browser Mode) |
+| `d` | Delete Record (Table Browser Mode) |
+| `r` | Refresh Table |
 | `q` / `Ctrl+C` | Quit |
 
 ## Tech Stack
