@@ -1,6 +1,20 @@
 # LazyAdmin
 
+> **Stop building React admin pages for internal tools. Just write SQL.**
+
 A config-driven TUI (Terminal User Interface) database admin engine. Generate a database admin dashboard instantly with just a YAML configuration file.
+
+## Install
+
+```bash
+go install github.com/qyinm/lazyadmin@latest
+```
+
+## Why?
+
+Every internal tool starts with "I just need to view this table" and ends with a week of fighting React components, state management, and API endpoints. 
+
+**LazyAdmin** lets you skip the frontend work. Write a SQL query in a YAML file, and get a full TUI dashboard with CRUD capabilities instantly.
 
 ## Features
 
