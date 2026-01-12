@@ -16,6 +16,7 @@ type SSHConfig struct {
 }
 
 type DatabaseConfig struct {
+	Label    string     `yaml:"label"`
 	Driver   string     `yaml:"driver"`
 	Host     string     `yaml:"host"`
 	Port     int        `yaml:"port"`
@@ -34,9 +35,10 @@ type View struct {
 }
 
 type Config struct {
-	ProjectName string         `yaml:"project_name"`
-	Database    DatabaseConfig `yaml:"database"`
-	Views       []View         `yaml:"views"`
+	ProjectName string           `yaml:"project_name"`
+	Database    DatabaseConfig   `yaml:"database"` // Deprecated: used for backward compatibility
+	Connections []DatabaseConfig `yaml:"connections"`
+	Views       []View           `yaml:"views"`
 }
 
 func Load(path string) (*Config, error) {
@@ -50,26 +52,65 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
-	switch cfg.Database.Driver {
-	case "sqlite", "sqlite3", "postgres", "postgresql", "mysql":
-	case "":
-		return nil, fmt.Errorf("database driver is required; supported drivers: sqlite, sqlite3, postgres, postgresql, mysql")
-	default:
-		return nil, fmt.Errorf("unsupported database driver %q; supported drivers: sqlite, sqlite3, postgres, postgresql, mysql", cfg.Database.Driver)
+	// Backward compatibility: If Connections is empty but Database is present, use it.
+	if len(cfg.Connections) == 0 && cfg.Database.Driver != "" {
+		if cfg.Database.Label == "" {
+			cfg.Database.Label = "Default"
+		}
+		cfg.Connections = append(cfg.Connections, cfg.Database)
 	}
 
-	if cfg.Database.Port == 0 {
-		switch cfg.Database.Driver {
-		case "postgres":
-			cfg.Database.Port = 5432
-		case "mysql":
-			cfg.Database.Port = 3306
+	if len(cfg.Connections) == 0 {
+		return nil, fmt.Errorf("no database connections defined")
+	}
+
+	// Validate and set defaults for all connections
+	for i := range cfg.Connections {
+		c := &cfg.Connections[i]
+
+		switch c.Driver {
+		case "sqlite", "sqlite3", "postgres", "postgresql", "mysql":
+		case "":
+			return nil, fmt.Errorf("connection %d: database driver is required", i)
+		default:
+			return nil, fmt.Errorf("connection %d: unsupported database driver %q", i, c.Driver)
+		}
+
+		if c.Port == 0 {
+			switch c.Driver {
+			case "postgres":
+				c.Port = 5432
+			case "mysql":
+				c.Port = 3306
+			}
+		}
+
+		if c.SSH != nil && c.SSH.Port == 0 {
+			c.SSH.Port = 22
+		}
+
+		if c.Label == "" {
+			c.Label = fmt.Sprintf("Connection %d", i+1)
 		}
 	}
 
-	if cfg.Database.SSH != nil && cfg.Database.SSH.Port == 0 {
-		cfg.Database.SSH.Port = 22
+	// Ensure the deprecated field matches the first connection for any legacy code access
+	if len(cfg.Connections) > 0 {
+		cfg.Database = cfg.Connections[0]
 	}
 
 	return &cfg, nil
+}
+
+func Save(path string, cfg *Config) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	return nil
 }
