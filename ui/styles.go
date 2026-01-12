@@ -40,4 +40,8 @@ var (
 			Foreground(DraculaComment).
 			Italic(true).
 			Padding(2, 4)
+
+	AppStyle = lipgloss.NewStyle().
+			Background(DraculaBackground).
+			Foreground(DraculaForeground)
 )

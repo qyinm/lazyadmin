@@ -528,7 +528,8 @@ func (m Model) View() string {
 		status = fmt.Sprintf("❌ %s", m.err.Error())
 	}
 
-	return mainView + "\n" + statusStyle.Render(status)
+	finalView := mainView + "\n" + statusStyle.Render(status)
+	return AppStyle.Width(m.width).Height(m.height).Render(finalView)
 }
 
 func (m Model) renderContent() string {
