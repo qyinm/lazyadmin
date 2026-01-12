@@ -18,6 +18,10 @@ type Connection struct {
 }
 
 func Connect(cfg *config.DatabaseConfig) (*Connection, error) {
+	if err := ValidateDriver(cfg.Driver); err != nil {
+		return nil, err
+	}
+
 	var tunnel *SSHTunnel
 	var dsn string
 	var err error

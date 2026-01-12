@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -47,6 +48,14 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
+	}
+
+	switch cfg.Database.Driver {
+	case "sqlite", "sqlite3", "postgres", "postgresql", "mysql":
+	case "":
+		return nil, fmt.Errorf("database driver is required; supported drivers: sqlite, sqlite3, postgres, postgresql, mysql")
+	default:
+		return nil, fmt.Errorf("unsupported database driver %q; supported drivers: sqlite, sqlite3, postgres, postgresql, mysql", cfg.Database.Driver)
 	}
 
 	if cfg.Database.Port == 0 {

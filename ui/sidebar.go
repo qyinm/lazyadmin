@@ -9,12 +9,14 @@ type ViewItem struct {
 	title       string
 	description string
 	query       string
+	isTable     bool
 }
 
 func (v ViewItem) Title() string       { return v.title }
 func (v ViewItem) Description() string { return v.description }
 func (v ViewItem) FilterValue() string { return v.title }
 func (v ViewItem) Query() string       { return v.query }
+func (v ViewItem) IsTable() bool       { return v.isTable }
 
 func NewSidebar(views []config.View, width, height int) list.Model {
 	items := make([]list.Item, len(views))
