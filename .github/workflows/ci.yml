@@ -23,6 +23,32 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
+  test-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Run security tests
+        run: go test -v ./db/... -run "Test.*Injection|Test.*Escape|Test.*Quote"
+
+  test-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Run all unit tests
+        run: go test -v ./...
+
   test-sqlite:
     runs-on: ubuntu-latest
     steps:
