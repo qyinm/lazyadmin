@@ -1,0 +1,11 @@
+project_name: "Dievas Ops"
+database: "./test.db"
+
+views:
+  - title: "All Users"
+    description: "View all registered users"
+    query: "SELECT id, email, role, created_at FROM users LIMIT 50"
+
+  - title: "Recent Payments"
+    description: "Last 10 transactions"
+    query: "SELECT id, amount, currency, status FROM payments ORDER BY id DESC LIMIT 10"
