@@ -29,7 +29,7 @@ func main() {
 	}
 	defer conn.Close()
 
-	m := ui.NewModel(cfg, conn.DB)
+	m := ui.NewModel(cfg, configPath, conn.DB)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {

@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/qyinm/lazyadmin/config"
@@ -16,7 +18,8 @@ import (
 type Focus int
 
 const (
-	FocusSidebar Focus = iota
+	FocusConnections Focus = iota
+	FocusSidebar
 	FocusTable
 	FocusForm
 	FocusConfirm
@@ -27,10 +30,38 @@ type Mode int
 const (
 	ModeView Mode = iota
 	ModeTableBrowser
+	ModeConnectionForm
 )
+
+const (
+	connPaneRatio          = 15
+	tablePaneRatio         = 20
+	minConnPaneWidth       = 20
+	minTablePaneWidth      = 25
+	horizontalPaddingTotal = 4
+	verticalPaddingTotal   = 6
+)
+
+type formFieldInfo struct {
+	label       string
+	placeholder string
+	isPassword  bool
+}
+
+var connFormFieldInfos = []formFieldInfo{
+	{label: "Label"},
+	{label: "Driver"},
+	{label: "Host"},
+	{label: "Port", placeholder: "5432"},
+	{label: "User"},
+	{label: "Password", isPassword: true},
+	{label: "Database Name"},
+	{label: "Path (SQLite)"},
+}
 
 type Model struct {
 	config        *config.Config
+	configPath    string
 	db            *sql.DB
 	driver        string
 	sidebar       list.Model
@@ -50,13 +81,16 @@ type Model struct {
 	confirmMsg    string
 	confirmAction func()
 	tables        []db.TableInfo
+
+	connSidebar list.Model
+	connForm    []textinput.Model
 }
 
-func NewModel(cfg *config.Config, database *sql.DB) Model {
+func NewModel(cfg *config.Config, configPath string, database *sql.DB) Model {
 	t := table.New(
 		table.WithColumns([]table.Column{}),
 		table.WithRows([]table.Row{}),
-		table.WithFocused(false),
+		table.WithFocused(true),
 		table.WithHeight(10),
 	)
 
@@ -68,23 +102,77 @@ func NewModel(cfg *config.Config, database *sql.DB) Model {
 		Bold(true).
 		Foreground(DraculaCyan).
 		Background(DraculaBackground)
-	s.Selected = s.Selected.
-		Foreground(DraculaBackground).
-		Background(DraculaPurple).
-		Bold(false)
-	s.Cell = s.Cell.
-		Background(DraculaBackground)
+	s.Selected = lipgloss.NewStyle().
+		Bold(true).
+		Reverse(true)
+	s.Cell = lipgloss.NewStyle()
 	t.SetStyles(s)
+
+	var connItems []list.Item
+	for _, c := range cfg.Connections {
+		connItems = append(connItems, ViewItem{
+			title:       c.Label,
+			description: fmt.Sprintf("%s (%s)", c.Driver, c.Host),
+			query:       c.Name,
+		})
+	}
+	connList := list.New(connItems, list.NewDefaultDelegate(), 0, 0)
+	connList.Title = "Connections"
+	connList.SetShowHelp(false)
+	connList.SetShowStatusBar(false)
+	connList.SetFilteringEnabled(false)
+	connList.Styles.Title = TitleStyle
+
+	tableDelegate := list.NewDefaultDelegate()
+	tableDelegate.ShowDescription = false
+	tableDelegate.Styles.SelectedTitle = tableDelegate.Styles.SelectedTitle.
+		Foreground(DraculaPink).
+		Background(DraculaBackground).
+		Bold(true)
+	tableDelegate.Styles.SelectedDesc = tableDelegate.Styles.SelectedDesc.
+		Foreground(DraculaComment).
+		Background(DraculaBackground)
+	tableList := list.New([]list.Item{}, tableDelegate, 0, 0)
+	tableList.Title = "Tables"
+	tableList.SetShowHelp(false)
+	tableList.SetShowStatusBar(false)
+	tableList.SetFilteringEnabled(false)
+	tableList.Styles.Title = TitleStyle
+
+	inputs := make([]textinput.Model, len(connFormFieldInfos))
+	for i, info := range connFormFieldInfos {
+		ti := textinput.New()
+		ti.Cursor.Style = lipgloss.NewStyle().Foreground(DraculaPink)
+		ti.Prompt = info.label + ": "
+		ti.PromptStyle = lipgloss.NewStyle().Foreground(DraculaCyan)
+		ti.Placeholder = info.placeholder
+
+		if info.isPassword {
+			ti.EchoMode = textinput.EchoPassword
+			ti.EchoCharacter = '•'
+		}
+
+		inputs[i] = ti
+	}
+
+	mode := ModeView
+	startFocus := FocusConnections
+	if database != nil {
+		startFocus = FocusSidebar
+	}
 
 	return Model{
 		config:      cfg,
+		configPath:  configPath,
 		db:          database,
 		driver:      cfg.Database.Driver,
-		sidebar:     list.Model{},
+		sidebar:     tableList,
 		table:       t,
-		focus:       FocusSidebar,
-		mode:        ModeView,
+		focus:       startFocus,
+		mode:        mode,
 		tableLoaded: false,
+		connSidebar: connList,
+		connForm:    inputs,
 	}
 }
 
@@ -94,6 +182,16 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+
+	if msg, ok := msg.(tea.KeyMsg); ok {
+		if msg.String() == "ctrl+c" {
+			return m, tea.Quit
+		}
+	}
+
+	if m.mode == ModeConnectionForm {
+		return m.updateConnectionForm(msg)
+	}
 
 	if m.showForm {
 		return m.updateForm(msg)
@@ -106,93 +204,153 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "q":
 			return m, tea.Quit
 
 		case "tab":
-			if m.focus == FocusSidebar {
-				m.focus = FocusTable
-				m.table.Focus()
-			} else {
+			switch m.focus {
+			case FocusConnections:
 				m.focus = FocusSidebar
-				m.table.Blur()
+			case FocusSidebar:
+				m.focus = FocusTable
+			case FocusTable:
+				m.focus = FocusConnections
 			}
 			return m, nil
 
 		case "enter":
+			if m.focus == FocusConnections {
+				return m.handleConnectionSelect()
+			}
 			if m.focus == FocusSidebar {
+				m.focus = FocusTable
 				return m.handleSidebarSelect()
 			}
 			return m, nil
+
+		case "n":
+			if m.focus == FocusConnections {
+				m.mode = ModeConnectionForm
+				m.connForm[0].Focus()
+				return m, textinput.Blink
+			}
 
 		case "i":
 			if m.focus == FocusTable && m.currentTable != "" && m.mode == ModeTableBrowser {
 				return m.showInsertForm()
 			}
-			return m, nil
 
 		case "e":
 			if m.focus == FocusTable && m.currentTable != "" && m.mode == ModeTableBrowser && m.tableLoaded {
 				return m.showEditForm()
 			}
-			return m, nil
 
 		case "d":
 			if m.focus == FocusTable && m.currentTable != "" && m.mode == ModeTableBrowser && m.tableLoaded {
 				return m.showDeleteConfirm()
 			}
-			return m, nil
 
 		case "r":
 			if m.currentTable != "" {
 				return m.refreshTable()
 			}
-			return m, nil
 
 		case "t":
 			return m.toggleMode()
 
 		case "?":
-			m.statusMsg = "i:Insert e:Edit d:Delete r:Refresh t:Toggle Mode Tab:Switch Focus q:Quit"
+			m.statusMsg = "Tab: Cycle Focus • Enter: Select • i/e/d: CRUD • n: New Conn"
 			return m, nil
 		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-
-		sidebarWidth := m.width * 30 / 100
-		contentWidth := m.width - sidebarWidth - 8
-
-		if m.mode == ModeTableBrowser && m.tables == nil {
-			tables, err := db.GetTables(m.db, m.driver)
-			if err == nil {
-				m.tables = tables
-			}
-		}
-
-		m.sidebar = m.buildSidebar(sidebarWidth-4, m.height-6)
-		m.sidebar.Title = m.config.ProjectName
-		m.sidebar.Styles.Title = TitleStyle
-
-		m.table.SetWidth(contentWidth - 4)
-		m.table.SetHeight(m.height - 10)
-
+		m.resizePanes()
 		return m, nil
 	}
 
-	if m.focus == FocusSidebar {
+	switch m.focus {
+	case FocusConnections:
+		m.connSidebar, cmd = m.connSidebar.Update(msg)
+	case FocusSidebar:
 		m.sidebar, cmd = m.sidebar.Update(msg)
-	} else {
+	case FocusTable:
 		m.table, cmd = m.table.Update(msg)
 	}
 
 	return m, cmd
 }
 
-func (m Model) buildSidebar(width, height int) list.Model {
-	var items []list.Item
+func (m *Model) resizePanes() {
+	if m.width == 0 {
+		return
+	}
 
+	connWidth := m.width * connPaneRatio / 100
+	if connWidth < minConnPaneWidth {
+		connWidth = minConnPaneWidth
+	}
+
+	tableWidth := m.width * tablePaneRatio / 100
+	if tableWidth < minTablePaneWidth {
+		tableWidth = minTablePaneWidth
+	}
+
+	contentWidth := m.width - connWidth - tableWidth - horizontalPaddingTotal
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+
+	panelHeight := m.height - verticalPaddingTotal
+	contentHeight := panelHeight - 2
+	if contentHeight < 0 {
+		contentHeight = 0
+	}
+
+	m.connSidebar.SetSize(connWidth-horizontalPaddingTotal, contentHeight-1)
+	m.sidebar.SetSize(tableWidth-horizontalPaddingTotal, contentHeight)
+
+	m.table.SetWidth(contentWidth - horizontalPaddingTotal)
+	m.table.SetHeight(contentHeight)
+}
+
+func (m Model) handleConnectionSelect() (tea.Model, tea.Cmd) {
+	index := m.connSidebar.Index()
+	if index >= 0 && index < len(m.config.Connections) {
+		connConfig := m.config.Connections[index]
+		conn, err := db.Connect(&connConfig)
+		if err != nil {
+			m.err = err
+			return m, nil
+		}
+
+		if m.db != nil {
+			m.db.Close()
+		}
+
+		m.db = conn.DB
+		m.driver = connConfig.Driver
+		m.tables = nil
+		m.currentTable = ""
+		m.statusMsg = fmt.Sprintf("Connected to %s", connConfig.Label)
+
+		tables, err := db.GetTables(m.db, m.driver)
+		if err == nil {
+			m.tables = tables
+			m.mode = ModeTableBrowser
+			m.refreshSidebarList()
+		} else {
+			m.err = err
+		}
+
+		m.focus = FocusSidebar
+	}
+	return m, nil
+}
+
+func (m *Model) refreshSidebarList() {
+	var items []list.Item
 	if m.mode == ModeTableBrowser {
 		for _, t := range m.tables {
 			items = append(items, ViewItem{
@@ -212,13 +370,117 @@ func (m Model) buildSidebar(width, height int) list.Model {
 			})
 		}
 	}
+	m.sidebar.SetItems(items)
+}
 
-	l := list.New(items, list.NewDefaultDelegate(), width, height)
-	l.SetShowStatusBar(false)
-	l.SetFilteringEnabled(false)
-	l.SetShowHelp(false)
+func (m Model) updateConnectionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "esc":
+			m.mode = ModeView
+			return m, nil
+		case "tab", "enter":
+			focusedIndex := -1
+			for i := range m.connForm {
+				if m.connForm[i].Focused() {
+					focusedIndex = i
+					break
+				}
+			}
 
-	return l
+			if msg.String() == "enter" && focusedIndex == len(m.connForm)-1 {
+				return m.submitConnectionForm()
+			}
+
+			if focusedIndex >= 0 {
+				m.connForm[focusedIndex].Blur()
+				next := (focusedIndex + 1) % len(m.connForm)
+				m.connForm[next].Focus()
+			}
+			return m, nil
+		}
+	}
+
+	cmds := make([]tea.Cmd, len(m.connForm))
+	for i := range m.connForm {
+		m.connForm[i], cmds[i] = m.connForm[i].Update(msg)
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func (m Model) getConnFormFieldValue(label string) string {
+	for i, info := range connFormFieldInfos {
+		if info.label == label {
+			return m.connForm[i].Value()
+		}
+	}
+	return ""
+}
+
+func (m Model) submitConnectionForm() (tea.Model, tea.Cmd) {
+	portStr := m.getConnFormFieldValue("Port")
+	var port int
+	if portStr != "" {
+		var err error
+		port, err = strconv.Atoi(portStr)
+		if err != nil {
+			m.err = fmt.Errorf("invalid port number: %s", portStr)
+			return m, nil
+		}
+	}
+
+	newConn := config.DatabaseConfig{
+		Label:    m.getConnFormFieldValue("Label"),
+		Driver:   m.getConnFormFieldValue("Driver"),
+		Host:     m.getConnFormFieldValue("Host"),
+		Port:     port,
+		User:     m.getConnFormFieldValue("User"),
+		Password: m.getConnFormFieldValue("Password"),
+		Name:     m.getConnFormFieldValue("Database Name"),
+		Path:     m.getConnFormFieldValue("Path (SQLite)"),
+	}
+
+	switch newConn.Driver {
+	case "sqlite", "sqlite3", "postgres", "postgresql", "mysql":
+	case "":
+		m.err = fmt.Errorf("driver is required")
+		return m, nil
+	default:
+		m.err = fmt.Errorf("unsupported driver: %s", newConn.Driver)
+		return m, nil
+	}
+
+	if newConn.Label == "" {
+		m.err = fmt.Errorf("label is required")
+		return m, nil
+	}
+
+	m.config.Connections = append(m.config.Connections, newConn)
+
+	if err := config.Save(m.configPath, m.config); err != nil {
+		m.err = err
+		return m, nil
+	}
+
+	var items []list.Item
+	for _, c := range m.config.Connections {
+		items = append(items, ViewItem{
+			title:       c.Label,
+			description: fmt.Sprintf("%s (%s)", c.Driver, c.Host),
+			query:       c.Name,
+		})
+	}
+	m.connSidebar.SetItems(items)
+
+	m.mode = ModeView
+	m.statusMsg = "Connection added"
+
+	for i := range m.connForm {
+		m.connForm[i].SetValue("")
+	}
+
+	return m, nil
 }
 
 func (m Model) handleSidebarSelect() (tea.Model, tea.Cmd) {
@@ -277,6 +539,10 @@ func (m Model) handleSidebarSelect() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) executeQuery(query string) (tea.Model, tea.Cmd) {
+	if m.db == nil {
+		m.err = fmt.Errorf("no database connection")
+		return m, nil
+	}
 	cols, rows, err := db.RunQuery(m.db, query)
 	if err != nil {
 		m.err = err
@@ -286,6 +552,9 @@ func (m Model) executeQuery(query string) (tea.Model, tea.Cmd) {
 	m.table.SetRows([]table.Row{})
 	m.table.SetColumns(cols)
 	m.table.SetRows(rows)
+	if len(rows) > 0 {
+		m.table.SetCursor(0)
+	}
 	m.tableLoaded = true
 	m.err = nil
 	m.statusMsg = fmt.Sprintf("Loaded %d rows", len(rows))
@@ -306,11 +575,9 @@ func (m Model) toggleMode() (tea.Model, tea.Cmd) {
 	if m.mode == ModeView {
 		m.mode = ModeTableBrowser
 		tables, err := db.GetTables(m.db, m.driver)
-		if err != nil {
-			m.err = err
-			return m, nil
+		if err == nil {
+			m.tables = tables
 		}
-		m.tables = tables
 		m.statusMsg = "Table Browser Mode"
 	} else {
 		m.mode = ModeView
@@ -318,9 +585,7 @@ func (m Model) toggleMode() (tea.Model, tea.Cmd) {
 		m.statusMsg = "View Mode"
 	}
 
-	m.sidebar = m.buildSidebar(m.width*30/100-4, m.height-6)
-	m.sidebar.Title = m.config.ProjectName
-	m.sidebar.Styles.Title = TitleStyle
+	m.refreshSidebarList()
 	m.tableLoaded = false
 
 	return m, nil
@@ -490,6 +755,14 @@ func (m Model) View() string {
 		return "Loading..."
 	}
 
+	if m.mode == ModeConnectionForm {
+		return AppStyle.Width(m.width).Height(m.height).Render(
+			lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
+				m.viewConnectionForm(),
+			),
+		)
+	}
+
 	if m.showForm {
 		formStyle := lipgloss.NewStyle().
 			Padding(2, 4).
@@ -497,36 +770,66 @@ func (m Model) View() string {
 			BorderForeground(DraculaGreen).
 			Background(DraculaBackground)
 
-		return formStyle.Render(m.form.View())
+		return AppStyle.Width(m.width).Height(m.height).Render(
+			lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
+				formStyle.Render(m.viewForm()),
+			),
+		)
 	}
 
-	sidebarWidth := m.width * 30 / 100
-	contentWidth := m.width - sidebarWidth - 8
+	var connBox, sidebarBox, contentBox string
+	connWidth := m.width * connPaneRatio / 100
+	if connWidth < minConnPaneWidth {
+		connWidth = minConnPaneWidth
+	}
+	tableWidth := m.width * tablePaneRatio / 100
+	if tableWidth < minTablePaneWidth {
+		tableWidth = minTablePaneWidth
+	}
+	contentWidth := m.width - connWidth - tableWidth - horizontalPaddingTotal
+	availableHeight := m.height - verticalPaddingTotal
 
-	var sidebarBox, contentBox string
+	connHelp := lipgloss.NewStyle().Render(
+		fmt.Sprintf("%s %s",
+			HelpKeyStyle.Render("n"),
+			HelpDescStyle.Render("new conn"),
+		),
+	)
+	connContent := lipgloss.JoinVertical(lipgloss.Left, m.connSidebar.View(), connHelp)
 
-	modeIndicator := "[View]"
-	if m.mode == ModeTableBrowser {
-		modeIndicator = "[Tables]"
+	if m.focus == FocusConnections {
+		connBox = SidebarActiveStyle.Width(connWidth).MaxWidth(connWidth).Height(availableHeight).MaxHeight(availableHeight).Render(connContent)
+	} else {
+		connBox = SidebarStyle.Width(connWidth).MaxWidth(connWidth).Height(availableHeight).MaxHeight(availableHeight).Render(connContent)
 	}
 
 	if m.focus == FocusSidebar {
-		sidebarBox = SidebarActiveStyle.Width(sidebarWidth).Height(m.height - 6).Render(m.sidebar.View())
-		contentBox = ContentStyle.Width(contentWidth).Height(m.height - 6).Render(m.renderContent())
-	} else if m.focus == FocusConfirm {
-		sidebarBox = SidebarStyle.Width(sidebarWidth).Height(m.height - 6).Render(m.sidebar.View())
-		contentBox = ContentActiveStyle.Width(contentWidth).Height(m.height - 6).Render(m.renderConfirm())
+		sidebarBox = SidebarActiveStyle.Width(tableWidth).MaxWidth(tableWidth).Height(availableHeight).MaxHeight(availableHeight).Render(m.sidebar.View())
 	} else {
-		sidebarBox = SidebarStyle.Width(sidebarWidth).Height(m.height - 6).Render(m.sidebar.View())
-		contentBox = ContentActiveStyle.Width(contentWidth).Height(m.height - 6).Render(m.renderContent())
+		sidebarBox = SidebarStyle.Width(tableWidth).MaxWidth(tableWidth).Height(availableHeight).MaxHeight(availableHeight).Render(m.sidebar.View())
 	}
 
-	mainView := lipgloss.JoinHorizontal(lipgloss.Top, sidebarBox, contentBox)
+	cStyle := ContentStyle
+	if m.focus == FocusTable || m.focus == FocusForm || m.focus == FocusConfirm {
+		cStyle = ContentActiveStyle
+	}
+
+	if m.focus == FocusConfirm {
+		contentBox = cStyle.Width(contentWidth).MaxWidth(contentWidth).Height(availableHeight).MaxHeight(availableHeight).Render(m.renderConfirm())
+	} else {
+		contentBox = cStyle.Width(contentWidth).MaxWidth(contentWidth).Height(availableHeight).MaxHeight(availableHeight).Render(m.renderContent())
+	}
+
+	mainView := lipgloss.JoinHorizontal(lipgloss.Top, connBox, sidebarBox, contentBox)
 
 	statusStyle := lipgloss.NewStyle().
 		Foreground(DraculaComment).
 		Padding(0, 1)
 
+	modeIndicator := "[View]"
+	if m.mode == ModeTableBrowser {
+		modeIndicator = "[Tables]"
+	}
 	status := fmt.Sprintf("%s %s | %s | ?: Help", modeIndicator, m.currentTable, m.statusMsg)
 	if m.err != nil {
 		status = fmt.Sprintf("❌ %s", m.err.Error())
@@ -534,6 +837,18 @@ func (m Model) View() string {
 
 	finalView := mainView + "\n" + statusStyle.Render(status)
 	return AppStyle.Width(m.width).Height(m.height).Render(finalView)
+}
+
+func (m Model) viewConnectionForm() string {
+	var b string
+	b += TitleStyle.Render("New Connection") + "\n\n"
+
+	for i := range m.connForm {
+		b += m.connForm[i].View() + "\n"
+	}
+
+	b += "\n" + EmptyStateStyle.Render("Enter: Save • Tab: Next • Esc: Cancel")
+	return b
 }
 
 func (m Model) renderContent() string {
@@ -557,4 +872,8 @@ func (m Model) renderConfirm() string {
 		Padding(2)
 
 	return confirmStyle.Render(m.confirmMsg)
+}
+
+func (m Model) viewForm() string {
+	return m.form.View()
 }
