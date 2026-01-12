@@ -6,6 +6,26 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type SSHConfig struct {
+	Host       string `yaml:"host"`
+	Port       int    `yaml:"port"`
+	User       string `yaml:"user"`
+	Password   string `yaml:"password"`
+	PrivateKey string `yaml:"private_key"`
+}
+
+type DatabaseConfig struct {
+	Driver   string     `yaml:"driver"`
+	Host     string     `yaml:"host"`
+	Port     int        `yaml:"port"`
+	User     string     `yaml:"user"`
+	Password string     `yaml:"password"`
+	Name     string     `yaml:"name"`
+	SSLMode  string     `yaml:"ssl_mode"`
+	Path     string     `yaml:"path"`
+	SSH      *SSHConfig `yaml:"ssh"`
+}
+
 type View struct {
 	Title       string `yaml:"title"`
 	Description string `yaml:"description"`
@@ -13,9 +33,9 @@ type View struct {
 }
 
 type Config struct {
-	ProjectName string `yaml:"project_name"`
-	Database    string `yaml:"database"`
-	Views       []View `yaml:"views"`
+	ProjectName string         `yaml:"project_name"`
+	Database    DatabaseConfig `yaml:"database"`
+	Views       []View         `yaml:"views"`
 }
 
 func Load(path string) (*Config, error) {
@@ -27,6 +47,19 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, err
+	}
+
+	if cfg.Database.Port == 0 {
+		switch cfg.Database.Driver {
+		case "postgres":
+			cfg.Database.Port = 5432
+		case "mysql":
+			cfg.Database.Port = 3306
+		}
+	}
+
+	if cfg.Database.SSH != nil && cfg.Database.SSH.Port == 0 {
+		cfg.Database.SSH.Port = 22
 	}
 
 	return &cfg, nil

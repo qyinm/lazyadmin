@@ -22,14 +22,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	database, err := db.Connect(cfg.Database)
+	conn, err := db.Connect(&cfg.Database)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error connecting to database: %v\n", err)
 		os.Exit(1)
 	}
-	defer database.Close()
+	defer conn.Close()
 
-	m := ui.NewModel(cfg, database)
+	m := ui.NewModel(cfg, conn.DB)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
