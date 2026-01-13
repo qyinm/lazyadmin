@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/table"
@@ -32,6 +34,7 @@ const (
 	ModeTableBrowser
 	ModeConnectionForm
 	ModeHelp
+	ModeCSVExport
 )
 
 const (
@@ -80,6 +83,8 @@ type Model struct {
 	form          FormModel
 	showForm      bool
 	showHelp      bool
+	showExport    bool
+	exportPath    string
 	confirmMsg    string
 	confirmAction func()
 	tables        []db.TableInfo
@@ -249,16 +254,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "enter":
-			if m.focus == FocusConnections {
-				return m.handleConnectionSelect()
-			}
-			if m.focus == FocusSidebar {
-				m.focus = FocusTable
-				return m.handleSidebarSelect()
-			}
-			return m, nil
-
 		case "n":
 			if m.focus == FocusConnections {
 				m.mode = ModeConnectionForm
@@ -292,6 +287,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "?":
 			m.showHelp = !m.showHelp
 			return m, nil
+
+		case "E":
+			if m.focus == FocusTable && m.currentTable != "" && m.mode == ModeTableBrowser && m.tableLoaded {
+				m.showExport = true
+				m.exportPath = fmt.Sprintf("%s_%s.csv", m.driver, m.currentTable)
+				return m, nil
+			}
+
+		case "enter":
+			if m.showExport {
+				return m.handleCSVExport()
+			}
+			if m.focus == FocusConnections {
+				return m.handleConnectionSelect()
+			}
+			if m.focus == FocusSidebar {
+				m.focus = FocusTable
+				return m.handleSidebarSelect()
+			}
+			return m, nil
+
+		case "esc":
+			if m.showExport {
+				m.showExport = false
+				return m, nil
+			}
+			if m.showHelp {
+				m.showHelp = false
+				return m, nil
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -817,6 +842,15 @@ func (m Model) View() string {
 		)
 	}
 
+	if m.showExport {
+		exportModal := m.renderExportModal()
+		return AppStyle.Width(m.width).Height(m.height).Render(
+			lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
+				exportModal,
+			),
+		)
+	}
+
 	var connBox, sidebarBox, contentBox string
 	connWidth := m.width * connPaneRatio / 100
 	if connWidth < minConnPaneWidth {
@@ -945,6 +979,7 @@ func (m Model) renderHelpModal() string {
 	helpText += keyStyle.Render("Tab") + "            " + descStyle.Render("Cycle focus (Connections ↔ Tables ↔ Data)") + "\n"
 	helpText += keyStyle.Render("n") + "              " + descStyle.Render("Add new connection") + "\n"
 	helpText += keyStyle.Render("t") + "              " + descStyle.Render("Toggle mode (View / Table Browser)") + "\n"
+	helpText += keyStyle.Render("E") + "              " + descStyle.Render("Export table to CSV") + "\n"
 	helpText += keyStyle.Render("?") + "              " + descStyle.Render("Show/hide this help") + "\n"
 	helpText += keyStyle.Render("Esc") + "            " + descStyle.Render("Close dialogs / Cancel") + "\n\n"
 
@@ -958,4 +993,90 @@ func (m Model) renderHelpModal() string {
 	helpText += "\n" + descStyle.Render("Press ? or Esc to close")
 
 	return modalStyle.Render(helpText)
+}
+
+func (m Model) renderExportModal() string {
+	modalStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(DraculaPurple).
+		Background(DraculaBackground).
+		Width(m.width - 20).
+		Height(12)
+
+	titleStyle := lipgloss.NewStyle().
+		Foreground(DraculaPink).
+		Bold(true).
+		Padding(0, 1)
+
+	labelStyle := lipgloss.NewStyle().
+		Foreground(DraculaCyan).
+		Bold(true)
+
+	pathStyle := lipgloss.NewStyle().
+		Foreground(DraculaForeground)
+
+	buttonStyle := lipgloss.NewStyle().
+		Foreground(DraculaGreen).
+		Bold(true).
+		Padding(0, 2)
+
+	hintStyle := lipgloss.NewStyle().
+		Foreground(DraculaComment).
+		Italic(true)
+
+	exportText := titleStyle.Render("Export to CSV") + "\n\n"
+	exportText += labelStyle.Render("File:") + " " + pathStyle.Render(m.exportPath) + "\n\n"
+	exportText += buttonStyle.Render("[ Enter: Export ]") + "  "
+	exportText += buttonStyle.Render("[ Esc: Cancel ]") + "\n\n"
+	exportText += hintStyle.Render("Esc to close without exporting")
+
+	return modalStyle.Render(exportText)
+}
+
+func (m Model) handleCSVExport() (tea.Model, tea.Cmd) {
+	m.showExport = false
+
+	// Get table data
+	rows := m.table.Rows()
+	if len(rows) == 0 {
+		m.err = fmt.Errorf("no data to export")
+		return m, nil
+	}
+
+	// Build CSV content
+	var csv strings.Builder
+
+	// Write header
+	cols := m.table.Columns()
+	for i, col := range cols {
+		if i > 0 {
+			csv.WriteString(",")
+		}
+		csv.WriteString("\"" + col.Title + "\"")
+	}
+	csv.WriteString("\n")
+
+	// Write data rows
+	for _, row := range rows {
+		for i, cell := range row {
+			if i > 0 {
+				csv.WriteString(",")
+			}
+			// Escape quotes and wrap in quotes
+			escaped := strings.ReplaceAll(cell, "\"", "\"\"")
+			csv.WriteString("\"" + escaped + "\"")
+		}
+		csv.WriteString("\n")
+	}
+
+	// Write to file
+	err := os.WriteFile(m.exportPath, []byte(csv.String()), 0644)
+	if err != nil {
+		m.err = err
+		m.statusMsg = fmt.Sprintf("Export failed: %v", err)
+	} else {
+		m.statusMsg = fmt.Sprintf("Exported to %s", m.exportPath)
+	}
+
+	return m, nil
 }
