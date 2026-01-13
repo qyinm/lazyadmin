@@ -31,6 +31,7 @@ const (
 	ModeView Mode = iota
 	ModeTableBrowser
 	ModeConnectionForm
+	ModeHelp
 )
 
 const (
@@ -78,6 +79,7 @@ type Model struct {
 	columns       []db.ColumnInfo
 	form          FormModel
 	showForm      bool
+	showHelp      bool
 	confirmMsg    string
 	confirmAction func()
 	tables        []db.TableInfo
@@ -288,7 +290,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.toggleMode()
 
 		case "?":
-			m.statusMsg = "Tab: Cycle Focus • Enter: Select • i/e/d: CRUD • n: New Conn"
+			m.showHelp = !m.showHelp
 			return m, nil
 		}
 
@@ -806,6 +808,15 @@ func (m Model) View() string {
 		)
 	}
 
+	if m.showHelp {
+		helpModal := m.renderHelpModal()
+		return AppStyle.Width(m.width).Height(m.height).Render(
+			lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
+				helpModal,
+			),
+		)
+	}
+
 	var connBox, sidebarBox, contentBox string
 	connWidth := m.width * connPaneRatio / 100
 	if connWidth < minConnPaneWidth {
@@ -905,4 +916,46 @@ func (m Model) renderConfirm() string {
 
 func (m Model) viewForm() string {
 	return m.form.View()
+}
+
+func (m Model) renderHelpModal() string {
+	modalStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(DraculaPurple).
+		Background(DraculaBackground).
+		Width(m.width - 20).
+		Height(m.height - 10)
+
+	titleStyle := lipgloss.NewStyle().
+		Foreground(DraculaPink).
+		Bold(true).
+		Padding(0, 1)
+
+	keyStyle := lipgloss.NewStyle().
+		Foreground(DraculaCyan).
+		Bold(true)
+
+	descStyle := lipgloss.NewStyle().
+		Foreground(DraculaForeground)
+
+	helpText := titleStyle.Render("Keyboard Shortcuts") + "\n\n"
+
+	// Global keys
+	helpText += keyStyle.Render("q / Ctrl+C") + "    " + descStyle.Render("Quit") + "\n"
+	helpText += keyStyle.Render("Tab") + "            " + descStyle.Render("Cycle focus (Connections ↔ Tables ↔ Data)") + "\n"
+	helpText += keyStyle.Render("n") + "              " + descStyle.Render("Add new connection") + "\n"
+	helpText += keyStyle.Render("t") + "              " + descStyle.Render("Toggle mode (View / Table Browser)") + "\n"
+	helpText += keyStyle.Render("?") + "              " + descStyle.Render("Show/hide this help") + "\n"
+	helpText += keyStyle.Render("Esc") + "            " + descStyle.Render("Close dialogs / Cancel") + "\n\n"
+
+	// Table browser keys
+	helpText += keyStyle.Render("Enter") + "           " + descStyle.Render("Select connection / table") + "\n"
+	helpText += keyStyle.Render("i") + "               " + descStyle.Render("Insert new row") + "\n"
+	helpText += keyStyle.Render("e") + "               " + descStyle.Render("Edit selected row") + "\n"
+	helpText += keyStyle.Render("d") + "               " + descStyle.Render("Delete selected row") + "\n"
+	helpText += keyStyle.Render("r") + "               " + descStyle.Render("Refresh table data") + "\n"
+
+	helpText += "\n" + descStyle.Render("Press ? or Esc to close")
+
+	return modalStyle.Render(helpText)
 }

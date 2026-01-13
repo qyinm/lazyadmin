@@ -4,7 +4,7 @@ import "github.com/charmbracelet/lipgloss"
 
 var (
 	DraculaBackground = lipgloss.Color("0")
-	DraculaForeground = lipgloss.Color("15")
+	DraculaForeground = lipgloss.Color("255")
 	DraculaPurple     = lipgloss.Color("5")
 	DraculaPink       = lipgloss.Color("13")
 	DraculaCyan       = lipgloss.Color("14")
@@ -54,6 +54,6 @@ var (
 			Bold(true)
 
 	HelpDescStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("255")).
+			Foreground(DraculaForeground).
 			Bold(true)
 )
