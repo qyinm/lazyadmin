@@ -189,6 +189,45 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Handle mouse events
+	if msg, ok := msg.(tea.MouseMsg); ok {
+		if msg.Type == tea.MouseLeft {
+			// Calculate pane boundaries
+			connWidth := m.width * connPaneRatio / 100
+			if connWidth < minConnPaneWidth {
+				connWidth = minConnPaneWidth
+			}
+			tableWidth := m.width * tablePaneRatio / 100
+			if tableWidth < minTablePaneWidth {
+				tableWidth = minTablePaneWidth
+			}
+
+			// Determine which pane was clicked (x is 0-indexed)
+			x := msg.X
+			if x <= connWidth {
+				prevConnIndex := m.connSidebar.Index()
+				m.focus = FocusConnections
+				m.connSidebar, cmd = m.connSidebar.Update(msg)
+				// Trigger connection select if item was clicked
+				if m.connSidebar.Index() != prevConnIndex && m.connSidebar.Index() >= 0 {
+					return m.handleConnectionSelect()
+				}
+			} else if x <= connWidth+tableWidth {
+				prevSidebarIndex := m.sidebar.Index()
+				m.focus = FocusSidebar
+				m.sidebar, cmd = m.sidebar.Update(msg)
+				// Trigger sidebar select if item was clicked
+				if m.sidebar.Index() != prevSidebarIndex && m.sidebar.Index() >= 0 {
+					m.focus = FocusTable
+					return m.handleSidebarSelect()
+				}
+			} else {
+				m.focus = FocusTable
+			}
+			return m, cmd
+		}
+	}
+
 	if m.mode == ModeConnectionForm {
 		return m.updateConnectionForm(msg)
 	}
