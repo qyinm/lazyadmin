@@ -200,3 +200,7 @@ views:
 ## License
 
 MIT
+
+---
+
+Inspired by [lazysql](https://github.com/jorgerojas26/lazysql) and [lazygit](https://github.com/jesseduffield/lazygit).
